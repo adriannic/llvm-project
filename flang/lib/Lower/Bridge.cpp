@@ -97,7 +97,8 @@ struct IncrementLoopInfo {
                              bool isUnordered = false)
       : loopVariableSym{&sym}, lowerExpr{Fortran::semantics::GetExpr(lower)},
         upperExpr{Fortran::semantics::GetExpr(upper)},
-        stepExpr{Fortran::semantics::GetExpr(step)}, isUnordered{isUnordered} {}
+        stepExpr{Fortran::semantics::GetExpr(step)}, isConcurrent{isUnordered} {
+  }
 
   IncrementLoopInfo(IncrementLoopInfo &&) = default;
   IncrementLoopInfo &operator=(IncrementLoopInfo &&x) = default;
@@ -120,7 +121,7 @@ struct IncrementLoopInfo {
   const Fortran::lower::SomeExpr *upperExpr;
   const Fortran::lower::SomeExpr *stepExpr;
   const Fortran::lower::SomeExpr *maskExpr = nullptr;
-  bool isUnordered; // do concurrent, forall
+  bool isConcurrent;
   llvm::SmallVector<const Fortran::semantics::Symbol *> localSymList;
   llvm::SmallVector<const Fortran::semantics::Symbol *> localInitSymList;
   llvm::SmallVector<
@@ -2293,11 +2294,11 @@ private:
     bool genDoConcurrent = false;
 
     for (IncrementLoopInfo &info : incrementLoopNestInfo) {
-      genDoConcurrent = info.isStructured() && info.isUnordered;
+      genDoConcurrent = info.isStructured() && info.isConcurrent;
 
       if (!genDoConcurrent)
         info.loopVariable = genLoopVariableAddress(loc, *info.loopVariableSym,
-                                                   info.isUnordered);
+                                                   info.isConcurrent);
 
       if (!getLoweringOptions().getIntegerWrapAround()) {
         iofBackup = builder->getIntegerOverflowFlags();
@@ -2425,7 +2426,7 @@ private:
 
       for (IncrementLoopInfo &info : llvm::reverse(incrementLoopNestInfo)) {
         info.loopVariable = genLoopVariableAddress(loc, *info.loopVariableSym,
-                                                   info.isUnordered);
+                                                   info.isConcurrent);
       }
 
       builder->setInsertionPointToEnd(loopWrapperOp.getBody());
@@ -2488,7 +2489,7 @@ private:
       IncrementLoopInfo &info = *it;
       if (info.isStructured()) {
         // End fir.do_concurent.loop.
-        if (info.isUnordered) {
+        if (info.isConcurrent) {
           builder->setInsertionPointAfter(info.loopOp->getParentOp());
           continue;
         }
